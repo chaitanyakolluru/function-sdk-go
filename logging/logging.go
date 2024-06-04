@@ -21,6 +21,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/crossplane/function-sdk-go/errors"
 )
@@ -90,12 +91,24 @@ func (l logrLogger) WithValues(keysAndValues ...any) FnLogger {
 }
 
 // NewLogger returns a new logger.
-func NewLogger(debug bool) (FnLogger, error) {
+func NewLogger(debug, timeEncodeISO8601 bool) (FnLogger, error) {
 	o := []zap.Option{zap.AddCallerSkip(1)}
 	if debug {
 		zl, err := zap.NewDevelopment(o...)
 		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create development zap logger")
 	}
-	zl, err := zap.NewProduction(o...)
-	return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
+
+	// If timeEncodeISO8601 is true, use ISO8601TimeEncoder.
+	if timeEncodeISO8601 {
+		pCfg := zap.NewProductionEncoderConfig()
+		pCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+		p := zap.NewProductionConfig()
+		p.EncoderConfig = pCfg
+		zl, err := p.Build(o...)
+		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
+	} else {
+		zl, err := zap.NewProduction(o...)
+		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
+	}
 }
