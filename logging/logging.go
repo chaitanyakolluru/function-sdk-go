@@ -105,7 +105,7 @@ func NewLogger(debug, timeEncodeISO8601 bool) (FnLogger, error) {
 
 		p := zap.NewProductionConfig()
 		p.EncoderConfig = pCfg
-		zl, err := p.Build()
+		zl, err := p.Build(o...)
 		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
 	} else {
 		zl, err := zap.NewProduction(o...)
