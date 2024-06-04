@@ -91,25 +91,31 @@ func (l logrLogger) WithValues(keysAndValues ...any) FnLogger {
 }
 
 // NewLogger returns a new logger.
-func NewLogger(debug, timeEncodeISO8601 bool) (FnLogger, error) {
-	o := []zap.Option{zap.AddCallerSkip(1)}
+func NewLogger(debug, timeEncodeISO8601 bool, addCallerSkip ...int) (FnLogger, error) {
+	// default value for caller skip
+	callerSkip := 1
+	if len(addCallerSkip) > 0 {
+		callerSkip = addCallerSkip[0]
+	}
+
+	o := []zap.Option{zap.AddCallerSkip(callerSkip)}
 	if debug {
 		zl, err := zap.NewDevelopment(o...)
 		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create development zap logger")
 	}
 
-	// If timeEncodeISO8601 is true, use ISO8601TimeEncoder.
+	// If timeEncodeISO8601 is true, use ISO8601TimeEncoder for production logger.
 	if timeEncodeISO8601 {
 		pCfg := zap.NewProductionEncoderConfig()
 		pCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
 		p := zap.NewProductionConfig()
 		p.EncoderConfig = pCfg
-		o2 := []zap.Option{zap.AddCallerSkip(2)}
-		zl, err := p.Build(o2...)
-		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
-	} else {
-		zl, err := zap.NewProduction(o...)
+		zl, err := p.Build(o...)
 		return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
 	}
+
+	// If timeEncodeISO8601 is false, use the default EpochTimeEncoder for production logger.
+	zl, err := zap.NewProduction(o...)
+	return NewLogrLogger(zapr.NewLogger(zl)), errors.Wrap(err, "cannot create production zap logger")
 }
