@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	ginsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/stats"
 
 	"github.com/crossplane/function-sdk-go/logging"
 	"github.com/crossplane/function-sdk-go/proto/v1beta1"
@@ -42,9 +43,10 @@ const (
 
 // ServeOptions configure how a Function is served.
 type ServeOptions struct {
-	Network     string
-	Address     string
-	Credentials credentials.TransportCredentials
+	Network          string
+	Address          string
+	Credentials      credentials.TransportCredentials
+	OtelStatsHandler *stats.Handler
 }
 
 // A ServeOption configures how a Function is served.
@@ -114,6 +116,15 @@ func Insecure(insecure bool) ServeOption {
 	}
 }
 
+// OtelStatsHandler includes the otel configured grpc stats handler when
+// creating a new gRPC server.
+func OtelStatsHandler(h *stats.Handler) ServeOption {
+	return func(o *ServeOptions) error {
+		o.OtelStatsHandler = h
+		return nil
+	}
+}
+
 // Serve the supplied Function by creating a gRPC server and listening for
 // RunFunctionRequests. Blocks until the server returns an error.
 func Serve(fn v1beta1.FunctionRunnerServiceServer, o ...ServeOption) error {
@@ -137,7 +148,13 @@ func Serve(fn v1beta1.FunctionRunnerServiceServer, o ...ServeOption) error {
 		return errors.Wrapf(err, "cannot listen for %s connections at address %q", so.Network, so.Address)
 	}
 
-	srv := grpc.NewServer(grpc.Creds(so.Credentials))
+	var srv *grpc.Server
+	if so.OtelStatsHandler != nil {
+		srv = grpc.NewServer(grpc.Creds(so.Credentials), grpc.StatsHandler(*so.OtelStatsHandler))
+	} else {
+		srv = grpc.NewServer(grpc.Creds(so.Credentials))
+	}
+
 	reflection.Register(srv)
 	v1beta1.RegisterFunctionRunnerServiceServer(srv, fn)
 	return errors.Wrap(srv.Serve(lis), "cannot serve mTLS gRPC connections")
