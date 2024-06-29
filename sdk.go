@@ -148,12 +148,11 @@ func Serve(fn v1beta1.FunctionRunnerServiceServer, o ...ServeOption) error {
 		return errors.Wrapf(err, "cannot listen for %s connections at address %q", so.Network, so.Address)
 	}
 
-	var srv *grpc.Server
+	gso := []grpc.ServerOption{grpc.Creds(so.Credentials)}
 	if so.OtelStatsHandler != nil {
-		srv = grpc.NewServer(grpc.Creds(so.Credentials), grpc.StatsHandler(*so.OtelStatsHandler))
-	} else {
-		srv = grpc.NewServer(grpc.Creds(so.Credentials))
+		gso = append(gso, grpc.StatsHandler(*so.OtelStatsHandler))
 	}
+	srv := grpc.NewServer(gso...)
 
 	reflection.Register(srv)
 	v1beta1.RegisterFunctionRunnerServiceServer(srv, fn)
