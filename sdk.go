@@ -42,9 +42,10 @@ const (
 
 // ServeOptions configure how a Function is served.
 type ServeOptions struct {
-	Network     string
-	Address     string
-	Credentials credentials.TransportCredentials
+	Network           string
+	Address           string
+	Credentials       credentials.TransportCredentials
+	GrpcServerOptions []grpc.ServerOption
 }
 
 // A ServeOption configures how a Function is served.
@@ -114,6 +115,14 @@ func Insecure(insecure bool) ServeOption {
 	}
 }
 
+// Adds additional server options to be passed to the grpc server.
+func GrpcServerOptions(gso []grpc.ServerOption) ServeOption {
+	return func(o *ServeOptions) error {
+		o.GrpcServerOptions = gso
+		return nil
+	}
+}
+
 // Serve the supplied Function by creating a gRPC server and listening for
 // RunFunctionRequests. Blocks until the server returns an error.
 func Serve(fn v1beta1.FunctionRunnerServiceServer, o ...ServeOption) error {
@@ -137,7 +146,10 @@ func Serve(fn v1beta1.FunctionRunnerServiceServer, o ...ServeOption) error {
 		return errors.Wrapf(err, "cannot listen for %s connections at address %q", so.Network, so.Address)
 	}
 
-	srv := grpc.NewServer(grpc.Creds(so.Credentials))
+	gso := []grpc.ServerOption{grpc.Creds(so.Credentials)}
+	gso = append(gso, so.GrpcServerOptions...)
+
+	srv := grpc.NewServer(gso...)
 	reflection.Register(srv)
 	v1beta1.RegisterFunctionRunnerServiceServer(srv, fn)
 	return errors.Wrap(srv.Serve(lis), "cannot serve mTLS gRPC connections")
